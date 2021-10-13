@@ -173,6 +173,7 @@
     "activated": { "prefix": " " },
     "deactivated": { "prefix": " " }
   },
+  "timewarrior": { "prefix": " " },
   "xrandr": {
     "on": { "prefix": " " },
     "off": { "prefix": " " },
