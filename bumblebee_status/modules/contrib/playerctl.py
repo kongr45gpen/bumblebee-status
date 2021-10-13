@@ -6,14 +6,12 @@ Requires the following executable:
     * playerctl
 
 Parameters:
-    * playerctl.format:   Format string (defaults to '{{artist}} - {{title}}  {{duration(position)}}/{{duration(mpris:length)}}').
-      The format string is passed to 'playerctl -f' as an argument. Read `the README <https://github.com/altdesktop/playerctl#printing-properties-and-metadata>`_ for more information.
+    * playerctl.format:   Format string (defaults to '{artist} - {title}')
+      Available values are: {album}, {title}, {artist}, {trackNumber}
     * playerctl.layout:   Comma-separated list to change order of widgets (defaults to song, previous, pause, next)
       Widget names are: playerctl.song, playerctl.prev, playerctl.pause, playerctl.next
-    * playerctl.args:     The arguments added to playerctl.
-      You can check 'playerctl --help' or `its README <https://github.com/altdesktop/playerctl#using-the-cli>`_. For example, it could be '-p vlc,%any'.
 
-Parameters are inspired by the `spotify` module, many thanks to its developers!
+Parameters are inherited from `spotify` module, many thanks to its developers!
 
 contributed by `smitajit <https://github.com/smitajit>`_ - many thanks!
 """
@@ -38,8 +36,9 @@ class Module(core.module.Module):
             )
         )
 
-        self.__cmd = "playerctl " + self.parameter("args", "") + " "
-        self.__format = self.parameter("format", "{{artist}} - {{title}}  {{duration(position)}}/{{duration(mpris:length)}}")
+        self.__song = ""
+        self.__cmd = "playerctl "
+        self.__format = self.parameter("format", "{artist} - {title}")
 
         widget_map = {}
         for widget_name in self.__layout:
@@ -49,6 +48,7 @@ class Module(core.module.Module):
                     "button": core.input.LEFT_MOUSE,
                     "cmd": self.__cmd + "previous",
                 }
+                widget.set("state", "prev")
             elif widget_name == "playerctl.pause":
                 widget_map[widget] = {
                     "button": core.input.LEFT_MOUSE,
@@ -59,6 +59,7 @@ class Module(core.module.Module):
                     "button": core.input.LEFT_MOUSE,
                     "cmd": self.__cmd + "next",
                 }
+                widget.set("state", "next")
             elif widget_name == "playerctl.song":
                 widget_map[widget] = [
                     {
@@ -85,34 +86,35 @@ class Module(core.module.Module):
 
     def update(self):
         try:
+            self.__get_song()
+
             playback_status = str(util.cli.execute(self.__cmd + "status")).strip()
+            for widget in self.widgets():
+                if widget.name == "playerctl.pause":
+                    if playback_status != "":
+                        if playback_status == "Playing":
+                            widget.set("state", "playing")
+                        else:
+                            widget.set("state", "paused")
+                elif widget.name == "playerctl.song":
+                    widget.set("state", "song")
+                    note = ""
+                    if playback_status == "Playing":
+                        note = "🎵 "
+                    widget.full_text(note + self.__song)
         except Exception as e:
             logging.exception(e)
-            playback_status = None
-        for widget in self.widgets():
-            if playback_status:
-                if widget.name == "playerctl.pause":
-                    if playback_status == "Playing":
-                        widget.set("state", "playing")
-                    elif playback_status == "Paused":
-                        widget.set("state", "paused")
-                    elif playback_status == "Stopped":
-                        widget.set("state", "stopped")
-                    else:
-                        widget.set("state", "")
-                elif widget.name == "playerctl.next":
-                    widget.set("state", "next")
-                elif widget.name == "playerctl.prev":
-                    widget.set("state", "prev")
-                elif widget.name == "playerctl.song":
-                    widget.full_text(self.__get_song())
-            else:
-                widget.set("state", "")
-                widget.full_text(" ")
+            self.__song = ""
 
     def __get_song(self):
-        try:
-            return str(util.cli.execute(self.__cmd + "metadata -f '" + self.__format + "'")).strip()
-        except Exception as e:
-            logging.exception(e)
-            return " "
+        album = str(util.cli.execute(self.__cmd + "metadata xesam:album")).strip()
+        title = str(util.cli.execute(self.__cmd + "metadata xesam:title")).strip()
+        artist = str(util.cli.execute(self.__cmd + "metadata xesam:albumArtist")).strip()
+        track_number = str(util.cli.execute(self.__cmd + "metadata xesam:trackNumber")).strip()
+
+        self.__song = self.__format.format(
+            album = album,
+            title = title,
+            artist = artist,
+            trackNumber = track_number
+        )
